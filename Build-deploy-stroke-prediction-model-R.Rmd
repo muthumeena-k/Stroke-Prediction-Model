@@ -1,0 +1,173 @@
+---
+title: "Build and deploy a stroke prediction model using R"
+date: "`r Sys.Date()`"
+output: html_document
+author: "MuthuMeena"
+---
+
+# About Data Analysis Report
+
+This RMarkdown file contains the report of the data analysis done for the project on building and deploying a stroke prediction model in R. It contains analysis such as data exploration, summary statistics and building the prediction models. The final report was completed on `r date()`. 
+
+**Data Description:**
+
+According to the World Health Organization (WHO) stroke is the 2nd leading cause of death globally, responsible for approximately 11% of total deaths.
+
+This data set is used to predict whether a patient is likely to get stroke based on the input parameters like gender, age, various diseases, and smoking status. Each row in the data provides relevant information about the patient.
+
+
+# Task One: Import data and data preprocessing
+
+## Load data and install packages
+
+```{r}
+install.packages('tidyverse')
+library(readr)
+install.packages('ggplot2')
+library(ggplot2)
+library(dplyr)
+stroke=read_csv('healthcare-dataset-stroke-data.csv')
+glimpse(stroke)
+stroke=stroke%>%select(-id)
+stroke=stroke%>%
+  mutate(
+    bmi=as.numeric(bmi),
+    gender=as.factor(gender),
+    hypertension=as.factor(hypertension),
+    heart_disease=as.factor(heart_disease),
+    ever_married=as.factor(ever_married),
+    work_type=as.factor(work_type),
+    Residence_type=as.factor(Residence_type),
+    smoking_status=as.factor(smoking_status),
+    stroke=factor(stroke,levels=c(0,1),labels=c('No','Yes'))
+  )
+stroke$bmi[is.na(stroke$bmi)]=median(stroke$bmi,na.rm=TRUE)
+
+```
+
+
+## Describe and explore the data
+
+```{r}
+glimpse(stroke)
+summary(stroke)
+table(stroke$stroke)
+prop.table(table(stroke$stroke))
+ggplot(stroke,aes(x=age))+
+  geom_histogram(binwidth=5,fill='skyblue',color='black')+labs(title = 'age distribution')
+ggplot(stroke,aes(x=stroke,fill=stroke))+
+  geom_bar()+labs(title ='stroke vs no stroke')
+
+
+```
+
+
+
+# Task Two: Build prediction models
+
+```{r}
+install.packages('caTools')
+install.packages('randomForest')
+install.packages('ROSE')
+library(caTools)
+library(randomForest)
+library(ROSE)
+set.seed(123)
+split=sample.split(stroke$stroke,SplitRatio=0.75)
+train_set=subset(stroke,split==TRUE)
+test_set=subset(stroke,split==FALSE)
+set.seed(456)
+train_balanced=ROSE(stroke~.,data = train_set)$data
+table(train_balanced$stroke)
+log_model=glm(stroke~.,data = train_balanced,family = 'binomial')
+rf_model=randomForest(stroke~.,data=train_balanced)
+```
+
+
+
+
+# Task Three: Evaluate and select prediction models
+
+```{r}
+install.packages('caret')
+library(caret)
+log_predictions=predict(log_model,newdata = test_set,type = 'response')
+log_predicted_labels=ifelse(log_predictions>0.5,'Yes','No')
+log_cm=confusionMatrix(data = as.factor(log_predicted_labels),reference = test_set$stroke)
+print("logistic regression results")
+print(log_cm)
+rf_predictions=predict(rf_model,newdata = test_set)
+rf_cm=confusionMatrix(data = rf_predictions,reference = test_set$stroke)
+print("random forest results")
+print(rf_cm)
+```
+
+
+
+# Task Four: Deploy the prediction model
+
+```{r}
+set.seed(789)
+final_balanced_data=ROSE(stroke~.,data = stroke)$data
+final_rf_model=randomForest(stroke~.,data = final_balanced_data)
+print("Final model trained on entire data")
+print(final_rf_model)
+saveRDS(final_rf_model,'stroke_model.rds')
+loaded_model=readRDS('stroke_model.rds')
+newpatient=data.frame(
+  gender=factor('Female',levels=levels(stroke$gender)),
+  age=67,
+  hypertension=factor(0,levels=levels(stroke$hypertension)),
+  heart_disease=factor(1,levels=levels(stroke$heart_disease)),
+  ever_married=factor('Yes',levels=levels(stroke$ever_married)),
+  work_type=factor('Private',levels=levels(stroke$work_type)),
+  Residence_type=factor("Urban",levels=levels(stroke$Residence_type)),
+  avg_glucose_level=228.69,
+  bmi=3664,
+  smoking_status=factor('formerly smoked',levels=levels(stroke$smoking_status))
+)
+prediction=predict(loaded_model,newdata = newpatient)
+prediction
+
+```
+
+
+
+
+# Task Five: Findings and Conclusions
+
+EDA reveals several predictors for stroke.patient age and hypertension shown strong associations with stroke incidence.
+the random forest model demonstrated a better performance than logistic regression model.it shown accuracy of 75.6% compared to logistic regression models 71.8%.
+but logistic regression model shown higher sensitivity of 80.6% for 'yes' stroke cases than random forest which shown only 75.8%.
+so logistic model is selected as final model due to its higher sensitivity.
+so the finalised logistic regression model was trained on complete balanced dataset to improve its predictive power.then its saved as RDS for deployment.then we used the same for a new patient whose data is hypothetical which gave 'yes' as prediction.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
